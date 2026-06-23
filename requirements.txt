@@ -1,4 +1,0 @@
-cffi==2.0.0
-cryptography==49.0.0
-pillow==12.2.0
-pycparser==3.0
