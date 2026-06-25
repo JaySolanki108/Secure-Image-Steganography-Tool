@@ -6,12 +6,13 @@ from encryption import encrypt_message, decrypt_message
 from steganography import encode_image, decode_image
 from tkinter import simpledialog
 from PIL import Image, ImageTk
+import base64
 
 class SteganographyGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Secure Image Steganography Tool")
+        self.root.title("Secure Image & File Steganography Tool")
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
@@ -22,30 +23,68 @@ class SteganographyGUI:
         self.root.resizable(True, True)
 
         self.image_path = ""
+        self.file_path = ""
 
         self.create_widgets()
 
     def drop_file(self, event):
 
-        self.image_path = event.data.strip("{}")
+        dropped_path = event.data.strip("{}")
 
-        filename = os.path.basename(self.image_path)
+        extension = os.path.splitext(
+            dropped_path
+        )[1].lower()
 
-        self.path_label.config(
-            text=f"✅ {filename}",
-            fg="#16A34A",
-            font=("Segoe UI", 11, "bold")
-        )
+        image_extensions = [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp"
+        ]
 
-        self.drag_text.config(
-            text="✅ Image Uploaded Successfully",
-            fg="#16A34A"
-        )
+        if extension in image_extensions:
 
-        self.drop_area.config(
-            highlightbackground="#16A34A",
-            highlightthickness=4
-        )
+            self.image_path = dropped_path
+            img = Image.open(self.image_path)
+            img.thumbnail((300, 300))
+
+            photo = ImageTk.PhotoImage(img)
+
+            if hasattr(self, "preview_label"):
+                self.preview_label.destroy()
+
+            self.preview_label = tk.Label(
+                self.frame,
+                image=photo,
+                bg="#FFFFFF"
+            )
+
+            self.preview_label.image = photo
+            self.preview_label.pack(pady=10)
+            
+            filename = os.path.basename(
+                self.image_path
+            )
+
+            self.path_label.config(
+                text=f"🖼️ Image: {filename}",
+                fg="#16A34A",
+                font=("Segoe UI", 11, "bold")
+            )
+
+        else:
+
+            self.file_path = dropped_path
+
+            filename = os.path.basename(
+                self.file_path
+            )
+
+            self.path_label.config(
+                text=f"📄 File: {filename}",
+                fg="#2563EB",
+                font=("Segoe UI", 11, "bold")
+            )
 
 
     def create_widgets(self):
@@ -63,7 +102,7 @@ class SteganographyGUI:
 
         subtitle = tk.Label(
             self.root,
-            text="Hide and Extract Secret Messages Inside Images Securely",
+            text="Hide and Extract Secret Messages and Files Inside Images Securely",
             font=("Segoe UI", 11),
             bg="#F8FAFC",
             fg="#64748B"
@@ -113,6 +152,28 @@ class SteganographyGUI:
 
         self.drop_area.dnd_bind("<<Drop>>", self.drop_file)
 
+
+        def clear_all(self):
+
+            self.image_path = ""
+            self.file_path = ""
+
+            self.path_label.config(
+                text="No image selected",
+                fg="#64748B",
+                font=("Segoe UI", 10)
+            )
+
+            if hasattr(self, "preview_label"):
+                self.preview_label.destroy()
+
+            self.drag_text.config(
+                text="Drag & Drop Image or File Here",
+                fg="#0F172A",
+                bg="#FFFFFF"
+            )
+
+
         def drag_enter(event):
 
             self.drop_area.config(
@@ -122,7 +183,7 @@ class SteganographyGUI:
             )
 
             self.drag_text.config(
-                text="📥 Release to Upload Image",
+                text="📥 Release to Upload Image or File",
                 fg="#2563EB",
                 bg="#DBEAFE"
             )
@@ -171,25 +232,27 @@ class SteganographyGUI:
             cursor="hand2"
         )
 
-        browse_link.pack(pady=(10, 20))
-
-        browse_link.bind(
-            "<Enter>",
-            lambda e: browse_link.config(
-                fg="#1D4ED8"
-            )
-        )
-
-        browse_link.bind(
-            "<Leave>",
-            lambda e: browse_link.config(
-                fg="#2563EB"
-            )
-        )
+        browse_link.pack(pady=(10, 5))
 
         browse_link.bind(
             "<Button-1>",
             lambda e: self.select_image()
+        )
+
+        browse_file = tk.Label(
+            self.drop_area,
+            text="Browse File",
+            font=("Segoe UI", 13, "bold underline"),
+            fg="#2563EB",
+            bg="#FFFFFF",
+            cursor="hand2"
+        )
+
+        browse_file.pack()
+
+        browse_file.bind(
+            "<Button-1>",
+            lambda e: self.select_file()
         )
 
         self.path_label = tk.Label(
@@ -229,6 +292,21 @@ class SteganographyGUI:
             command=self.decode_message,
             **button_style
         ).grid(row=0, column=1, padx=10)
+        
+
+        tk.Button(
+            button_frame,
+            text="📎 Hide File",
+            command=self.hide_file,
+            **button_style
+        ).grid(row=0, column=2, padx=10)
+
+        tk.Button(
+            button_frame,
+            text="📂 Extract File",
+            command=self.extract_file,
+            **button_style
+        ).grid(row=0, column=3, padx=10)
 
         tk.Button(
             button_frame,
@@ -239,8 +317,57 @@ class SteganographyGUI:
                 font=("Segoe UI", 10)
             ),
             **button_style
-        ).grid(row=0, column=2, padx=10)
+        ).grid(row=0, column=4, padx=10)
 
+    def hide_file(self):
+
+        if not self.image_path:
+            messagebox.showerror(
+                "Error",
+                "Select an image first."
+            )
+            return
+
+        self.file_path = filedialog.askopenfilename()
+
+        if not self.file_path:
+            return
+
+        try:
+
+            with open(self.file_path, "rb") as file:
+                file_data = file.read()
+
+            encoded_data = base64.b64encode(
+                file_data
+            ).decode()
+
+            encrypted = encrypt_message(
+                encoded_data
+            )
+
+            output_path = filedialog.asksaveasfilename(
+                defaultextension=".png"
+            )
+
+            if output_path:
+
+                encode_image(
+                    self.image_path,
+                    encrypted,
+                    output_path
+                )
+
+                messagebox.showinfo(
+                    "Success",
+                    "File hidden successfully!"
+                )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                str(e)
+            )
 
     def select_image(self):
 
@@ -257,12 +384,27 @@ class SteganographyGUI:
             filename = os.path.basename(self.image_path)
 
             self.path_label.config(
-                text=f"✅ {filename}",
-                fg="#16A34A",
+                text=f"📄 File Selected: {filename}",
+                fg="#2563EB",
                 font=("Segoe UI", 11, "bold")
             )
 
-        img = Image.open(self.image_path)
+            img = Image.open(self.image_path)
+            img.thumbnail((300, 300))
+
+            photo = ImageTk.PhotoImage(img)
+
+            if hasattr(self, "preview_label"):
+                self.preview_label.destroy()
+
+            self.preview_label = tk.Label(
+                self.frame,
+                image=photo,
+                bg="#FFFFFF"
+            )
+
+            self.preview_label.image = photo
+            self.preview_label.pack(pady=10)
         img.thumbnail((300, 300))
 
         photo = ImageTk.PhotoImage(img)
@@ -278,6 +420,27 @@ class SteganographyGUI:
         self.preview_label.image = photo
         self.preview_label.pack(pady=10)
 
+    def select_file(self):
+
+        self.file_path = filedialog.askopenfilename(
+            filetypes=[
+                ("Documents", "*.txt *.pdf *.docx"),
+                ("All Files", "*.*")
+            ]
+        )
+
+        if self.file_path:
+
+            filename = os.path.basename(
+                self.file_path
+            )
+
+            self.path_label.config(
+                text=f"📄 {filename}",
+                fg="#2563EB",
+                font=("Segoe UI", 11, "bold")
+            )
+            
     def encode_message(self):
 
         if not self.image_path:
@@ -358,6 +521,50 @@ class SteganographyGUI:
                 "No valid hidden message found."
             )
 
+    def extract_file(self):
+
+        if not self.image_path:
+            messagebox.showerror(
+                "Error",
+                "Select encoded image first."
+            )
+            return
+
+        try:
+
+            encrypted_data = decode_image(
+                self.image_path
+            )
+
+            decoded_data = decrypt_message(
+                encrypted_data
+            )
+
+            binary_data = base64.b64decode(
+                decoded_data
+            )
+
+            save_path = filedialog.asksaveasfilename(
+                initialfile="extracted_file",
+                title="Save Extracted File"
+            )
+
+            if save_path:
+
+                with open(save_path, "wb") as file:
+                    file.write(binary_data)
+
+                messagebox.showinfo(
+                    "Success",
+                    "File extracted successfully!"
+                )
+
+        except Exception as e:
+
+            messagebox.showerror(
+                "Error",
+                str(e)
+            )
 
 def run():
     root = TkinterDnD.Tk()
